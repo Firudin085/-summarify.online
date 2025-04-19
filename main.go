@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"bytes"
@@ -17,11 +17,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// --- İstek formatı
 type SummaryRequest struct {
 	VideoURL string `json:"videoUrl"`
 	Lang     string `json:"lang"`
 }
 
+// --- OpenRouter formatları
 type OpenRouterRequest struct {
 	Model    string               `json:"model"`
 	Messages []OpenRouterMessage `json:"messages"`
@@ -41,44 +43,52 @@ type OpenRouterResponse struct {
 }
 
 func main() {
+	// .env dosyasını yükle
 	err := godotenv.Load()
 	if err != nil {
 		log.Println(".env dosyası yüklenemedi:", err)
 	}
 
+	// Gin başlat
 	r := gin.Default()
 	r.LoadHTMLGlob("templates/*")
-	r.Static("/static", "./static")
+	r.Static("/static", "./static") // varsa static klasörü
 
+	// Ana sayfa
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", nil)
 	})
 
+	// Özetleme isteği
 	r.POST("/summarize", func(c *gin.Context) {
 		var request SummaryRequest
 		if err := c.ShouldBindJSON(&request); err != nil {
-			log.Println("JSON parse hatası:", err)
+			log.Println("❌ JSON parse hatası:", err)
 			c.JSON(http.StatusBadRequest, gin.H{"summary": "Geçersiz istek."})
 			return
 		}
 
 		transcript := getTranscript(request.VideoURL)
 		if transcript == "" {
-			log.Println("Transkript alınamadı")
+			log.Println("❌ Transkript alınamadı.")
 			c.JSON(http.StatusInternalServerError, gin.H{"summary": "Videodan transkript alınamadı."})
 			return
 		}
 
-		log.Println("GÖNDERİLEN TRANSKRİPT:")
-		log.Println(transcript)
+		// Token sınırı koruması (max 10.000 karakter)
+		if len(transcript) > 10000 {
+			transcript = transcript[:10000]
+		}
 
 		summary := getSummaryFromOpenRouter(transcript, request.Lang)
 		c.JSON(http.StatusOK, gin.H{"summary": summary})
 	})
 
-	r.Run(":8080")
+	// Sunucuyu dış dünyaya aç
+	r.Run("0.0.0.0:8080")
 }
 
+// --- YouTube Video ID çözümleme
 func getVideoID(videoURL string) string {
 	if strings.Contains(videoURL, "youtu.be/") {
 		parts := strings.Split(videoURL, "youtu.be/")
@@ -91,24 +101,25 @@ func getVideoID(videoURL string) string {
 	return ""
 }
 
+// --- Videodan altyazı çekme (yt-dlp)
 func getTranscript(videoURL string) string {
 	videoID := getVideoID(videoURL)
 	if videoID == "" {
-		log.Println("Video ID bulunamadı")
+		log.Println("❌ Video ID bulunamadı")
 		return ""
 	}
 
 	cmd := exec.Command("./yt-dlp", "--skip-download", "--write-auto-sub", "--sub-lang", "en", "-o", videoID+".%(ext)s", videoURL)
 	err := cmd.Run()
 	if err != nil {
-		log.Println("yt-dlp çalıştırılamadı:", err)
+		log.Println("❌ yt-dlp çalıştırılamadı:", err)
 		return ""
 	}
 
 	vttFile := videoID + ".en.vtt"
 	content, err := ioutil.ReadFile(vttFile)
 	if err != nil {
-		log.Println("VTT dosyası okunamadı:", err)
+		log.Println("❌ VTT dosyası okunamadı:", err)
 		return ""
 	}
 	defer os.Remove(vttFile)
@@ -130,10 +141,11 @@ func isNumber(s string) bool {
 	return err == nil
 }
 
+// --- OpenRouter üzerinden özetleme
 func getSummaryFromOpenRouter(transcript string, lang string) string {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
-		log.Println("OpenRouter API anahtarı bulunamadı.")
+		log.Println("❌ OpenRouter API anahtarı bulunamadı.")
 		return "API anahtarı eksik."
 	}
 
@@ -147,19 +159,19 @@ func getSummaryFromOpenRouter(transcript string, lang string) string {
 	reqData := OpenRouterRequest{
 		Model: "anthropic/claude-3-haiku",
 		Messages: []OpenRouterMessage{
-			{Role: "user", Content: prompt + "\n" + transcript},
+			{Role: "user", Content: prompt + "\n\n" + transcript},
 		},
 	}
 
 	jsonData, err := json.Marshal(reqData)
 	if err != nil {
-		log.Println("JSON marshal hatası:", err)
+		log.Println("❌ JSON marshal hatası:", err)
 		return "İstek hazırlanırken hata oluştu."
 	}
 
 	req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Println("HTTP isteği oluşturulamadı:", err)
+		log.Println("❌ HTTP isteği oluşturulamadı:", err)
 		return "İstek gönderilemedi."
 	}
 
@@ -171,24 +183,21 @@ func getSummaryFromOpenRouter(transcript string, lang string) string {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("OpenRouter API çağrısı başarısız:", err)
+		log.Println("❌ OpenRouter API çağrısı başarısız:", err)
 		return "API isteği başarısız."
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Println("Yanıt okunamadı:", err)
+		log.Println("❌ Yanıt okunamadı:", err)
 		return "Yanıt işlenemedi."
 	}
-
-	log.Println("OPENROUTER YANITI:")
-	log.Println(string(body))
 
 	var orResp OpenRouterResponse
 	err = json.Unmarshal(body, &orResp)
 	if err != nil {
-		log.Println("JSON çözümleme hatası:", err)
+		log.Println("❌ Yanıt çözümlenemedi:", err)
 		return "Yanıt çözümlenemedi."
 	}
 
