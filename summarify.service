@@ -1,0 +1,17 @@
+[Unit]
+Description=Summarify - YouTube Video Summarizer
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/summarify
+ExecStart=/root/summarify/summarify
+Restart=on-failure
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=summarify
+
+[Install]
+WantedBy=multi-user.target 
