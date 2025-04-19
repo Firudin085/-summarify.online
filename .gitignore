@@ -1,0 +1,7 @@
+.vs/
+.env
+yt-dlp
+yt-dlp.exe
+*.vtt
+*.exe
+.idea/

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube Video Özetleyici</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: #f9fafb;
+            color: #111;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 4rem 1rem;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 2.4rem;
+            font-weight: 600;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            border-right: .15em solid orange;
+            width: 0;
+            animation: typing 2s steps(40, end) forwards, blink .75s step-end infinite;
+        }
+
+        @keyframes typing {
+            from {
+                width: 0
+            }
+
+            to {
+                width: 100%
+            }
+        }
+
+        @keyframes blink {
+            50% {
+                border-color: transparent
+            }
+        }
+
+        .container {
+            margin-top: 2rem;
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.06);
+            width: 100%;
+            max-width: 700px;
+        }
+
+        select, input, button {
+            width: 100%;
+            padding: 0.9rem;
+            font-size: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        }
+
+        input, select {
+            border: 1px solid #ccc;
+        }
+
+        button {
+            font-weight: 600;
+            background: #2563eb;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+            button:hover {
+                background: #1e40af;
+            }
+
+        .loading {
+            margin-top: 1rem;
+            font-size: 1rem;
+            color: #6b7280;
+            display: none;
+        }
+
+        .dots::after {
+            content: '';
+            display: inline-block;
+            animation: dots 1.5s steps(3, end) infinite;
+        }
+
+        @keyframes dots {
+            0% {
+                content: '';
+            }
+
+            33% {
+                content: '.';
+            }
+
+            66% {
+                content: '..';
+            }
+
+            100% {
+                content: '...';
+            }
+        }
+
+        .summary-box {
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.4s ease;
+            background: #f3f4f6;
+            border-left: 4px solid #2563eb;
+            padding: 1rem;
+            margin-top: 2rem;
+            border-radius: 10px;
+            white-space: pre-wrap;
+        }
+
+            .summary-box.show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+        .download-buttons {
+            display: none;
+            gap: 10px;
+            margin-top: 1rem;
+        }
+
+        .footer {
+            margin-top: 3rem;
+            font-size: 0.9rem;
+            color: #9ca3af;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="title">YouTube Video Özetleyici</h1>
+
+    <div class="container">
+        <select id="langSelect">
+            <option value="tr">🇹🇷 Türkçe</option>
+            <option value="en">🇺🇸 English</option>
+            <option value="ru">🇷🇺 Русский</option>
+            <option value="ar">🇸🇦 العربية</option>
+        </select>
+
+        <input type="text" id="videoUrl" placeholder="YouTube video bağlantısı..." />
+        <button id="submitBtn" onclick="summarize()">Videoyu Özetle</button>
+
+        <div id="loading" class="loading"><span class="dots" id="loadingText">Yükleniyor</span></div>
+
+        <div id="summary" class="summary-box"></div>
+
+        <div class="download-buttons" id="downloadBtns">
+            <button id="btnTxt" onclick="downloadTXT()">📄 TXT olarak indir</button>
+            <button id="btnPdf" onclick="downloadPDF()">🧾 PDF olarak indir</button>
+        </div>
+    </div>
+
+    <div class="footer">powered by Firudin Mustafayev</div>
+
+    <script>
+        const translations = {
+            tr: {
+                title: "YouTube Video Özetleyici",
+                placeholder: "YouTube video bağlantısı...",
+                button: "Videoyu Özetle",
+                loading: "Yükleniyor",
+                error: "Bir hata oluştu. Lütfen tekrar deneyin.",
+                txt: "📄 TXT olarak indir",
+                pdf: "🧾 PDF olarak indir"
+            },
+            en: {
+                title: "YouTube Video Summarizer",
+                placeholder: "Paste YouTube video URL...",
+                button: "Summarize Video",
+                loading: "Loading",
+                error: "An error occurred. Please try again.",
+                txt: "📄 Download as TXT",
+                pdf: "🧾 Download as PDF"
+            },
+            ru: {
+                title: "Суммаризатор видео YouTube",
+                placeholder: "Вставьте ссылку на видео YouTube...",
+                button: "Резюмировать видео",
+                loading: "Загрузка",
+                error: "Произошла ошибка. Попробуйте еще раз.",
+                txt: "📄 Скачать в TXT",
+                pdf: "🧾 Скачать в PDF"
+            },
+            ar: {
+                title: "ملخص فيديو يوتيوب",
+                placeholder: "الصق رابط فيديو يوتيوب...",
+                button: "تلخيص الفيديو",
+                loading: "جار التحميل",
+                error: "حدث خطأ. حاول مرة أخرى.",
+                txt: "📄 تحميل كـ TXT",
+                pdf: "🧾 تحميل كـ PDF"
+            }
+        };
+
+        const langSelect = document.getElementById("langSelect");
+        const title = document.getElementById("title");
+        const input = document.getElementById("videoUrl");
+        const submitBtn = document.getElementById("submitBtn");
+        const loadingText = document.getElementById("loadingText");
+        const btnTxt = document.getElementById("btnTxt");
+        const btnPdf = document.getElementById("btnPdf");
+
+        langSelect.addEventListener("change", () => {
+            const lang = langSelect.value;
+            title.innerText = translations[lang].title;
+            input.placeholder = translations[lang].placeholder;
+            submitBtn.innerText = translations[lang].button;
+            loadingText.innerText = translations[lang].loading;
+            btnTxt.innerText = translations[lang].txt;
+            btnPdf.innerText = translations[lang].pdf;
+        });
+
+        async function summarize() {
+            const url = input.value;
+            const lang = langSelect.value;
+            const loading = document.getElementById("loading");
+            const summaryBox = document.getElementById("summary");
+            const downloadBtns = document.getElementById("downloadBtns");
+
+            summaryBox.classList.remove("show");
+            summaryBox.innerText = "";
+            loading.style.display = "block";
+            downloadBtns.style.display = "none";
+
+            try {
+                const res = await fetch("/summarize", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ videoUrl: url, lang: lang }),
+                });
+
+                const data = await res.json();
+                loading.style.display = "none";
+                summaryBox.innerText = data.summary;
+                summaryBox.classList.add("show");
+                downloadBtns.style.display = "flex";
+            } catch {
+                loading.style.display = "none";
+                summaryBox.innerText = translations[lang].error;
+                summaryBox.classList.add("show");
+            }
+        }
+
+        function downloadTXT() {
+            const text = document.getElementById("summary").innerText;
+            const blob = new Blob([text], { type: "text/plain" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "ozet.txt";
+            link.click();
+        }
+
+        async function downloadPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const text = document.getElementById("summary").innerText;
+
+            const lines = doc.splitTextToSize(text, 180); // sayfa genişliği
+            doc.text(lines, 10, 20); // konumlandırma
+
+            doc.save("ozet.pdf");
+        }
+    </script>
+</body>
+</html>
