@@ -29,14 +29,13 @@ jobs:
       - name: Log current commit hash
         run: git rev-parse HEAD > deploy_hash.txt
 
-      - name: Rsync project to VPS
+      - name: Rsync project to VPS (with .git)
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
           rsync -avz --delete \
-            --exclude='.git' \
             --exclude='.github' \
             --exclude='.env' \
             . deploy_hash.txt \
