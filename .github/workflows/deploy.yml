@@ -2,51 +2,56 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: 
+    branches:
       - main
-    paths:
-      - '**'
-      - '!**.md'
-      - '!.gitignore'
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-      
+
       - name: Set up SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
-      
-      - name: Deploy to VPS
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Log current commit hash
+        run: git rev-parse HEAD > deploy_hash.txt
+
+      - name: Rsync project to VPS
         env:
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          SSH_USER: ${{ secrets.SSH_USER }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
-        run: |
-          echo "Deploying to VPS..."
-          rsync -avz --delete --exclude='.git' --exclude='.github' --exclude='.env' . $SSH_USER@$VPS_HOST:$DEPLOY_PATH
-          
-      - name: Restart Service on VPS
-        env:
           SSH_USER: ${{ secrets.SSH_USER }}
-          VPS_HOST: ${{ secrets.VPS_HOST }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
-          ssh $SSH_USER@$VPS_HOST "cd $DEPLOY_PATH && chmod +x yt-dlp && systemctl restart summarify || pm2 restart summarify || echo 'Manual restart required'" 
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.env' \
+            . deploy_hash.txt \
+            "$SSH_USER@$VPS_HOST:$DEPLOY_PATH"
+
+      - name: Restart service on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh "$SSH_USER@$VPS_HOST" "
+            cd $DEPLOY_PATH && \
+            chmod +x yt-dlp && \
+            systemctl restart summarify || \
+            pm2 restart summarify || \
+            echo 'Manual restart required'
+          "
