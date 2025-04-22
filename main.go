@@ -177,7 +177,7 @@ func getSummaryFromOpenRouter(transcript string, lang string) string {
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("HTTP-Referer", "http://localhost")
+	req.Header.Set("HTTP-Referer", "http://summarify.online")
 	req.Header.Set("X-Title", "YouTube Summary")
 
 	client := &http.Client{}
